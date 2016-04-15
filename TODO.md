@@ -1,9 +1,10 @@
 ## TODO
 These methods should have tests for required fields + successful or failed
 
-- [ ] Authorization
+- [X] Authorization
 - [ ] Recurring authorization
-- [ ] Purchase
+- [X] Purchase
+- [X] Recurring purchase
 - [ ] Cancel
 - [ ] Capture
 - [ ] Cancel or Refund
