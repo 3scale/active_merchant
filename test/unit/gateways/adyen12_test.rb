@@ -1,20 +1,55 @@
 require 'test_helper'
 
 class Adyen12Test < Test::Unit::TestCase
+
+  ### TESTS for EE only ###
   def setup
     @gateway = Adyen12Gateway.new(
-      some_credential: 'login',
-      another_credential: 'password'
+      login: 'ws@example.com',
+      password: 'password',
+      merchantAccount: 'Mercantor'
     )
 
-    @credit_card = credit_card
+    # @credit_card = credit_card
+    # Credit card is represented by an encrypted string
+    # It is provided by adyen JS library in EE for the initial payment
+    @credit_card = "adyenjs_0_1_10$aKV"
     @amount = 100
 
     @options = {
-      order_id: '1',
-      billing_address: address,
-      description: 'Store Purchase'
+      reference: '1',
+      shopperIP: '8.8.8.8'
     }
+  end
+
+  # Tests for fields requirements on authorize
+
+  def test_authorize_requirements
+    assert_raise ArgumentError, "Missing required parameter: reference" do
+      @gateway.authorize(@amount, @encrypted_credit_card_string, {})
+    end
+
+    assert_raise ArgumentError, "Missing required parameter: shopperIP" do
+      @gateway.authorize(@amount, @encrypted_credit_card_string, {reference: '1'})
+    end
+  end
+
+  def test_successful_authorize
+    @gateway.expects(:ssl_post).returns(successful_authorize_response)
+
+    response = @gateway.authorize(@amount, @credit_card, @options)
+    assert_success response
+
+    assert_equal '64158', response.authorization
+    assert response.test?
+  end
+
+  def test_failed_authorize
+    @gateway.expects(:ssl_post).returns(failed_authorize_response)
+
+    response = @gateway.authorize(@amount, @credit_card, @options)
+    assert_equal 'You have reached your payment threshold', response.message
+    assert_failure response
   end
 
   def test_successful_purchase
@@ -23,7 +58,7 @@ class Adyen12Test < Test::Unit::TestCase
     response = @gateway.purchase(@amount, @credit_card, @options)
     assert_success response
 
-    assert_equal 'REPLACE', response.authorization
+    assert_equal '12345', response.authorization
     assert response.test?
   end
 
@@ -31,14 +66,10 @@ class Adyen12Test < Test::Unit::TestCase
     @gateway.expects(:ssl_post).returns(failed_purchase_response)
 
     response = @gateway.purchase(@amount, @credit_card, @options)
+    assert_equal 'You do not have enough money', response.message
     assert_failure response
   end
 
-  def test_successful_authorize
-  end
-
-  def test_failed_authorize
-  end
 
   def test_successful_capture
   end
@@ -69,24 +100,46 @@ class Adyen12Test < Test::Unit::TestCase
 
   private
 
-  def successful_purchase_response
+  def successful_authorize_response
     %(
-      Easy to capture by setting the DEBUG_ACTIVE_MERCHANT environment variable
-      to "true" when running remote tests:
-
-      $ DEBUG_ACTIVE_MERCHANT=true ruby -Itest \
-        test/remote/gateways/remote_adyen12_test.rb \
-        -n test_successful_purchase
+    {
+        "pspReference" : "8413547924770610",
+        "resultCode" : "Authorised",
+        "authCode": "64158"
+    }
     )
   end
 
   def failed_purchase_response
+    %(
+     {
+       "pspReference": "1234567890123456",
+       "resultCode": "Refused",
+       "authCode": "",
+       "refusalReason": "You do not have enough money"
+     }
+    )
   end
 
-  def successful_authorize_response
+  def successful_purchase_response
+    %(
+    {
+        "pspReference" : "8413547924770610",
+        "resultCode" : "Authorised",
+        "authCode": "12345"
+    }
+    )
   end
 
   def failed_authorize_response
+    %(
+     {
+       "pspReference": "1234567890123456",
+       "resultCode": "Refused",
+       "authCode": "",
+       "refusalReason": "You have reached your payment threshold"
+     }
+    )
   end
 
   def successful_capture_response
