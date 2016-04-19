@@ -49,12 +49,12 @@ class Adyen12Test < Test::Unit::TestCase
   end
 
   def test_successful_purchase
-    @gateway.expects(:ssl_post).returns(successful_purchase_response)
-
-    response = @gateway.purchase(@amount, @credit_card, @options)
+    response = stub_comms do
+      @gateway.purchase(@amount, @credit_card, @options)
+    end.respond_with(successful_purchase_response, successful_capture_response)
     assert_success response
 
-    assert_equal '8413547924770610', response.authorization
+    assert_equal '098765432109876', response.authorization
     assert response.test?
   end
 

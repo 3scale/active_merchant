@@ -8,18 +8,29 @@ module ActiveMerchant #:nodoc:
 
       ENDPOINTS ={
         'authorize' => 'authorise',
-        'void' => 'cancel',
+        'authorize_recurring' => 'authorise',
         'cancel_or_refund' => 'cancelOrRefund',
         'capture' => 'capture',
         'purchase' => 'authorise',
-        'refund' => 'refund'
+        'refund' => 'refund',
+        'submit_recurring' => 'authorise',
+        'void' => 'cancel'
       }
 
       CUSTOMER_DATA = %i[
-        shopperEmail shopperReference fraudOffset selectedBrand deliveryDate
-        riskdata.deliveryMethod merchantOrderReference shopperInteraction
-        shopperIP
+        shopperEmail shopperReference shopperIP fraudOffset selectedBrand deliveryDate
+        riskdata.deliveryMethod merchantOrderReference shopperInteraction selectedRecurringDetailReference
       ]
+
+      RECURRING_FIELDS = %i[
+        shopperReference shopperEmail
+      ]
+
+      RECURRING_SUBMISSION_FIELDS = %i[
+        shopperReference shopperEmail shopperInteraction selectedRecurringDetailReference
+      ]
+
+      RECURRING_VALUES = %w(ONECLICK RECURRING ONECLICK,RECURRING RECURRING,ONECLICK)
 
       self.test_url = 'https://pal-test.adyen.com/pal/servlet/Payment/v12'
       # This is generic endpoint. Merchant-Specific endpoints are recommended  https://docs.adyen.com/manuals/api-manual#apiendpoints
@@ -40,13 +51,10 @@ module ActiveMerchant #:nodoc:
       end
 
       def purchase(money, payment, options={})
-        requires!(options, :reference)
-        post = initalize_post(options)
-        add_invoice(post, money, options)
-        add_payment(post, payment)
-        add_address(post, payment, options)
-        add_customer_data(post, options)
-        commit('purchase', post)
+        MultiResponse.run do |r|
+          r.process{authorize(money, payment, options)}
+          r.process{capture(money, r.authorization, options)}
+        end
       end
 
       def authorize(money, payment, options={})
@@ -56,14 +64,35 @@ module ActiveMerchant #:nodoc:
         add_payment(post, payment)
         add_address(post, payment, options)
         add_customer_data(post, options)
-
+        add_recurring_information(post, options)
         commit('authorize', post)
+      end
+
+      def authorize_recurring(money, payment, options = {})
+        requires!(options, :reference)
+        post = initalize_post(options)
+        add_invoice(post, money, options)
+        add_payment(post, payment)
+        add_address(post, payment, options)
+        add_customer_data(post, options)
+        add_recurring_information(post, options)
+        commit('authorize_recurring', post)
+      end
+
+      def submit_recurring(money, authorization, options = {})
+        requires!(options, :reference)
+        post = initalize_post(options)
+        add_invoice(post, money, options)
+        add_customer_data(post, options)
+        add_recurring_information_for_submission(post, options)
+        commit('submit_recurring', post)
       end
 
       def capture(money, authorization, options={})
         post = initalize_post(options)
-        add_invoice_for_modification(post, money, authorization, options)
         add_references(post, authorization, options)
+        add_customer_data(post, options)
+        add_invoice_for_modification(post, money, authorization, options)
         commit('capture', post)
       end
 
@@ -114,9 +143,10 @@ module ActiveMerchant #:nodoc:
       end
 
       def add_payment(post, payment)
-        if payment.is_a?(ActiveMerchant::Billing::CreditCard)
+        case payment
+        when ActiveMerchant::Billing::CreditCard
           add_credit_card_information(post, payment)
-        else # card encrypted token
+        else  # card encrypted token
           add_additional_payment_data(post, payment)
         end
       end
@@ -125,13 +155,36 @@ module ActiveMerchant #:nodoc:
         card = {
           expiryMonth: credit_card.month,
           expiryYear: credit_card.year,
-          holdereName: credit_card.name,
+          holderName: credit_card.name,
           number: credit_card.number,
           cvc: credit_card.verification_value
         }
         card.delete_if{|k,v| v.blank? }
-        requires!(card, :expiryMonth, :expiryYear, :holdereName, :number, :cvc)
+        requires!(card, :expiryMonth, :expiryYear, :holderName, :number, :cvc)
         post[:card] = card
+      end
+
+      def add_recurring_information(post, options)
+        if options[:recurring]
+          recurring_requirements!(options)
+          post[:recurring] ||= {}
+          post[:recurring][:contract] = options[:recurring]
+        end
+      end
+
+      def add_recurring_information_for_submission(post, options)
+        if options[:recurring]
+          requires!(options, *RECURRING_SUBMISSION_FIELDS)
+          add_recurring_information(post, options)
+          post[:selectedRecurringDetailReference] = options[:selectedRecurringDetailReference] || 'LATEST'
+        end
+      end
+
+      def recurring_requirements!(options)
+        unless RECURRING_VALUES.include?(options[:recurring])
+          raise ArgumentError, ":reccuring must be in #{RECURRING_VALUES.join(', ')}"
+        end
+        requires!(options, *RECURRING_FIELDS)
       end
 
       # FIXME This part cannot be tested unless a browser is opened to generate a credit card token
@@ -171,7 +224,7 @@ module ActiveMerchant #:nodoc:
 
       def success_from(action, response)
         case action.to_s
-        when 'authorize', 'purchase'
+        when 'authorize', 'purchase', 'authorize_recurring', 'submit_recurring'
           ['Authorised', 'Received', 'RedirectShopper'].include?(response['resultCode'])
         when 'capture', 'refund'
           response['response'] == "[#{action}-received]"
@@ -184,7 +237,7 @@ module ActiveMerchant #:nodoc:
 
       def message_from(action, response)
         case action.to_s
-        when 'authorize', 'purchase'
+        when 'authorize', 'purchase', 'authorize_recurring', 'submit_recurring'
           response['refusalReason'] || response['resultCode'] || response['message']
         when 'capture', 'refund', 'void'
           response['response'] || response['message']
@@ -193,7 +246,7 @@ module ActiveMerchant #:nodoc:
 
       def authorization_from(action, response)
         case action.to_s
-        when 'authorize', 'purchase'
+        when 'authorize', 'purchase', 'authorize_recurring', 'submit_recurring'
           response['pspReference']
         when 'capture', 'refund', 'void'
           response['pspReference']
