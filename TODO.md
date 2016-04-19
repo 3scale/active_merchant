@@ -5,7 +5,6 @@ These methods should have tests for required fields + successful or failed
 - [ ] Recurring authorization
 - [X] Purchase
 - [X] Recurring purchase
-- [ ] Cancel
-- [ ] Capture
-- [ ] Cancel or Refund
-- [ ] Refund
+- [X] Cancel
+- [X] Capture
+- [X] Refund
