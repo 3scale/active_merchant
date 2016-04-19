@@ -5,33 +5,48 @@ class RemoteAdyen12Test < Test::Unit::TestCase
     @gateway = Adyen12Gateway.new(fixtures(:adyen12))
 
     @amount = 100
-    @credit_card = credit_card('4000100011112224')
+
+    # https://www.adyen.com/home/support/knowledgebase/implementation-articles?article=kb_imp_17
+    @credit_card = credit_card('4111111111111111',
+    :month => 8,
+    :year => 2018,
+    :first_name => 'Test',
+    :last_name => 'Card',
+    :verification_value => '737',
+    :brand => 'visa'
+    )
+
+    # This crypted card needs to be generated every 24 hours for the tests to run
+    adyenjs = %Q(adyenjs_0_1_16$ub3bdU8BS+Us0HHO/mTQox/3cG8qlQ7C+NgRY0SC32PDPdqqOQ84Nk8BHgw+8TnBbAYDH++RnnU0gfiEEKi2TH7fZ/ayJqR6iyZeblOgjC8MYTx2Xnbhzj5LbkGsSTu0tbY2H8PMH0cpEBIX/jMsaLSZqPFH72Apj/RxaVBBTLe7cHYZav+Z2pDzfRAruBXDvMNp47BDK/o9h9Q5lmeN8uudJSiHHqTzdX8HfmfamUrftsPiXi8uxmsdAO0iDahQk8Q/G6Rbxdmf2MOl8fzTeyQ1rpDbSQegYuihi4y50EvRw4EmrEmTHyB9EsyWSYCdreO+PfRNgpJPijV3e7PXXQ==$nLUy0SGhf0V/o5hSmy8OrZgYdivEj08MZk2EYNkz1IwAyupQLH1b1XYBlZQp4NnljgayHsWFWPE1yT2FZlKa+P9g8eztHbd4H1TUtKu3WyfncQe9sr1Ax2JLC9Ju5mnT7xAxNh3suqXhbuLVFRcXWoujhkYtwxZo63EBCDW2Fyue2fHI1PFqHa5vKC9HKKhziTX3EXjsw29oTZOIREXogHoCuEXHQ025K7QOs3tXKoDbDzUyDhAnFKZX+/9PSFuKKDkt22kXSIvWlE8M2XrQOUcihT3xz9eOae4PMGNSNedoJhNuUyiOtadvlvG6tURJOk1Ny4EGrdkUh5sr0zkHByozrQCvrWlL3zD8gHRDhLt7QhRNCBrJ6NDBX3n9pBOStbh3vpD7We0Gp8dV2Lv7t5r24iB191H1N0sXvV5dJO6gMmHpatCVKGQ58EIHH1YXXmXRD5KDUec3vKc8Gwc3T+WCp/asuEfkqMH3ouqKA4c80m5ENK84mKb2fnONNVtazQt77/NM6h2NGDbNIZHKOV7P2LvsmR5ccEIn+8U5SGyoxN3PKG174Dl1NwKWdrgfjpC7DkOstpwRCVwycF+byBuyTCT7VBRJBvFzUKaOWdreCiVKGBT64op0r91KI2h/vpZzahvvxlnMyBYIVETrSkIfww1D7f8vfHop5SYQpiSlz9Z7xYRGqJAbLV6sYnIub0mYSvmFH4O5)
+    @credit_card = adyenjs
+
     @declined_card = credit_card('4000300011112220')
 
     @options = {
-      order_id: '1',
-      billing_address: address,
-      description: 'Store Purchase'
+      reference: '3',
+      shopperEmail: "s.hopper@test.com",
+      shopperIP: "61.294.12.12",
+      shopperReference: "Simon Hopper"
     }
   end
 
   def test_successful_purchase
     response = @gateway.purchase(@amount, @credit_card, @options)
     assert_success response
-    assert_equal 'REPLACE WITH SUCCESS MESSAGE', response.message
+    assert_equal 'Authorised', response.message
   end
 
   def test_failed_purchase
     response = @gateway.purchase(@amount, @declined_card, @options)
     assert_failure response
-    assert_equal 'REPLACE WITH FAILED PURCHASE MESSAGE', response.message
+    assert_equal 'Not allowed', response.message
   end
 
   def test_successful_authorize_and_capture
     auth = @gateway.authorize(@amount, @credit_card, @options)
     assert_success auth
 
-    assert capture = @gateway.capture(nil, auth.authorization)
+    assert capture = @gateway.capture(@amount, auth.authorization, @options.slice(:reference))
     assert_success capture
   end
 
@@ -44,7 +59,7 @@ class RemoteAdyen12Test < Test::Unit::TestCase
     auth = @gateway.authorize(@amount, @credit_card, @options)
     assert_success auth
 
-    assert capture = @gateway.capture(@amount-1, auth.authorization)
+    assert capture = @gateway.capture(@amount - 1, auth.authorization)
     assert_success capture
   end
 
@@ -57,7 +72,7 @@ class RemoteAdyen12Test < Test::Unit::TestCase
     purchase = @gateway.purchase(@amount, @credit_card, @options)
     assert_success purchase
 
-    assert refund = @gateway.refund(nil, purchase.authorization)
+    assert refund = @gateway.refund(@amount, purchase.authorization)
     assert_success refund
   end
 
@@ -70,7 +85,7 @@ class RemoteAdyen12Test < Test::Unit::TestCase
   end
 
   def test_failed_refund
-    response = @gateway.refund(nil, '')
+    response = @gateway.refund(0, '')
     assert_failure response
   end
 
@@ -90,19 +105,20 @@ class RemoteAdyen12Test < Test::Unit::TestCase
   def test_successful_verify
     response = @gateway.verify(@credit_card, @options)
     assert_success response
-    assert_match %r{REPLACE WITH SUCCESS MESSAGE}, response.message
+    assert_match 'Authorised', response.message
   end
 
   def test_failed_verify
     response = @gateway.verify(@declined_card, @options)
     assert_failure response
-    assert_match %r{REPLACE WITH FAILED PURCHASE MESSAGE}, response.message
+    assert_match 'Not allowed', response.message
   end
 
   def test_invalid_login
     gateway = Adyen12Gateway.new(
       login: '',
-      password: ''
+      password: '',
+      merchantAccount: 'hello'
     )
     response = gateway.purchase(@amount, @credit_card, @options)
     assert_failure response

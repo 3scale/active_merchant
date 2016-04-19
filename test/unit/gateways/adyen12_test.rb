@@ -1,6 +1,7 @@
 require 'test_helper'
 
 class Adyen12Test < Test::Unit::TestCase
+  include CommStub
 
   ### TESTS for EE only ###
   def setup
@@ -17,8 +18,7 @@ class Adyen12Test < Test::Unit::TestCase
     @amount = 100
 
     @options = {
-      reference: '1',
-      shopperIP: '8.8.8.8'
+      reference: '1'
     }
   end
 
@@ -28,10 +28,6 @@ class Adyen12Test < Test::Unit::TestCase
     assert_raise ArgumentError, "Missing required parameter: reference" do
       @gateway.authorize(@amount, @encrypted_credit_card_string, {})
     end
-
-    assert_raise ArgumentError, "Missing required parameter: shopperIP" do
-      @gateway.authorize(@amount, @encrypted_credit_card_string, {reference: '1'})
-    end
   end
 
   def test_successful_authorize
@@ -40,7 +36,7 @@ class Adyen12Test < Test::Unit::TestCase
     response = @gateway.authorize(@amount, @credit_card, @options)
     assert_success response
 
-    assert_equal '64158', response.authorization
+    assert_equal '1234567890123456', response.authorization
     assert response.test?
   end
 
@@ -58,7 +54,7 @@ class Adyen12Test < Test::Unit::TestCase
     response = @gateway.purchase(@amount, @credit_card, @options)
     assert_success response
 
-    assert_equal '12345', response.authorization
+    assert_equal '8413547924770610', response.authorization
     assert response.test?
   end
 
@@ -72,24 +68,60 @@ class Adyen12Test < Test::Unit::TestCase
 
 
   def test_successful_capture
+    @gateway.expects(:ssl_post).returns(successful_capture_response)
+    response = @gateway.capture(@amount, 'pspReference')
+    assert_equal '098765432109876', response.authorization
+    assert_equal '[capture-received]', response.message
+    assert response.test?
   end
 
   def test_failed_capture
+    @gateway.expects(:ssl_post).returns(failed_capture_response)
+    response = @gateway.capture(-@amount, 'pspReference')
+    assert_nil response.authorization
+    assert_equal 'Invalid amount specified', response.message
+    assert_failure response
   end
 
   def test_successful_refund
+    @gateway.expects(:ssl_post).returns(successful_refund_response)
+    response = @gateway.refund(@amount, 'pspReference')
+    assert_equal 'authorization-12345', response.authorization
+    assert_equal '[refund-received]', response.message
+    assert response.test?
   end
 
   def test_failed_refund
+    @gateway.expects(:ssl_post).returns(failed_refund_response)
+    response = @gateway.refund(0, '')
+    assert_nil response.authorization
+    assert_equal 'No amount specified', response.message
+    assert_failure response
   end
 
   def test_successful_void
+    @gateway.expects(:ssl_post).returns(successful_void_response)
+    response = @gateway.refund(@amount, 'pspReference')
+    assert_equal 'void-reference-12345', response.authorization
+    assert_equal '[cancel-received]', response.message
+    assert response.test?
   end
 
   def test_failed_void
+    @gateway.expects(:ssl_post).returns(failed_void_response)
+    response = @gateway.void('')
+    assert_nil response.authorization
+    assert_equal 'Original pspReference required for this operation', response.message
+    assert_failure response
   end
 
   def test_successful_verify
+    response = stub_comms do
+      @gateway.verify(@credit_card, @options)
+    end.respond_with(successful_authorize_response)
+    assert_success response
+    assert_equal "Authorised", response.message
+    assert response.test?
   end
 
   def test_successful_verify_with_failed_void
@@ -103,7 +135,7 @@ class Adyen12Test < Test::Unit::TestCase
   def successful_authorize_response
     %(
     {
-        "pspReference" : "8413547924770610",
+        "pspReference" : "1234567890123456",
         "resultCode" : "Authorised",
         "authCode": "64158"
     }
@@ -143,20 +175,72 @@ class Adyen12Test < Test::Unit::TestCase
   end
 
   def successful_capture_response
+    %(
+    {
+        "pspReference" : "098765432109876",
+        "response" : "[capture-received]"
+    }
+    )
   end
 
   def failed_capture_response
+    %(
+    {
+      "status":422,
+      "errorCode":"137",
+      "message":"Invalid amount specified",
+      "errorType":"validation"
+    }
+    )
   end
 
   def successful_refund_response
+    %(
+    {
+        "pspReference" : "authorization-12345",
+        "response" : "[refund-received]"
+    }
+    )
   end
 
   def failed_refund_response
+    %(
+    {
+      "status":422,
+      "errorCode":"100",
+      "message":"No amount specified",
+      "errorType":"validation"
+    }
+    )
   end
 
   def successful_void_response
+    %(
+    {
+        "pspReference" : "void-reference-12345",
+        "response" : "[cancel-received]"
+    }
+    )
   end
 
   def failed_void_response
+    %(
+    {
+       "errorCode" : "167",
+       "errorType" : "validation",
+       "message" : "Original pspReference required for this operation",
+       "status" : 422
+    }
+    )
+  end
+
+  def successful_verify_response
+    %(
+    {
+        "pspReference" : "1234567890123456",
+        "resultCode" : "Authorised",
+        "authCode": "64158"
+    }
+    )
   end
 end
