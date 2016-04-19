@@ -28,18 +28,45 @@ class RemoteAdyen12Test < Test::Unit::TestCase
       shopperIP: "61.294.12.12",
       shopperReference: "Simon Hopper"
     }
+    @recurring = {
+      recurring:  'RECURRING'
+    }
+    @recurring_submission = {
+      shopperInteraction: 'ContAuth',
+      selectedRecurringDetailReference: 'LATEST'
+    }
   end
 
   def test_successful_purchase
     response = @gateway.purchase(@amount, @credit_card, @options)
     assert_success response
-    assert_equal 'Authorised', response.message
+    assert_equal '[capture-received]', response.message
   end
 
   def test_failed_purchase
     response = @gateway.purchase(@amount, @declined_card, @options)
     assert_failure response
-    assert_equal 'Not allowed', response.message
+    assert_equal 'Refused', response.message
+  end
+
+  def test_successful_recurring_purchase
+    response = @gateway.authorize_recurring(0, @credit_card, @options.merge(@recurring))
+    recurring = @gateway.submit_recurring(1500, response.authorization, @options.merge(@recurring.merge(@recurring_submission)))
+    assert_success response
+    assert_success recurring
+    assert_equal 'Authorised', response.message
+    assert_equal 'Authorised', recurring.message
+  end
+
+  def test_failed_recurring_purchase
+    response = @gateway.authorize_recurring(0, @credit_card, @options.merge(@recurring))
+    recurring = @gateway.submit_recurring(1500, response.authorization, @options.merge({
+      shopperInteraction: 'ContAuth',
+      selectedRecurringDetailReference: 'NonExistent'
+    }))
+    assert_success response
+    assert_failure recurring
+    assert_equal 'Unknown', recurring.message
   end
 
   def test_successful_authorize_and_capture
@@ -111,7 +138,7 @@ class RemoteAdyen12Test < Test::Unit::TestCase
   def test_failed_verify
     response = @gateway.verify(@declined_card, @options)
     assert_failure response
-    assert_match 'Not allowed', response.message
+    assert_match 'Refused', response.message
   end
 
   def test_invalid_login
