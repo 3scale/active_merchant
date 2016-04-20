@@ -69,6 +69,13 @@ class RemoteAdyen12Test < Test::Unit::TestCase
     assert_equal 'Unknown', recurring.message
   end
 
+  def test_list_recurring_details
+    response = @gateway.authorize_recurring(0, @credit_card, @options.merge(@recurring))
+    recurring = @gateway.submit_recurring(1500, response.authorization, @options.merge(@recurring.merge(@recurring_submission)))
+    details = @gateway.list_recurring_details(@options[:shopperReference], recurring: 'RECURRING')
+    assert_success details
+  end
+
   def test_successful_authorize_and_capture
     auth = @gateway.authorize(@amount, @credit_card, @options)
     assert_success auth

@@ -6,11 +6,12 @@ module ActiveMerchant #:nodoc:
     # Payment method will only be by credit card and credit card is referenced by an encrypted given string
     class Adyen12Gateway < Gateway
 
-      ENDPOINTS ={
+      ENDPOINTS = {
         'authorize' => 'authorise',
         'authorize_recurring' => 'authorise',
         'cancel_or_refund' => 'cancelOrRefund',
         'capture' => 'capture',
+        'list_recurring_details' => 'listRecurringDetails',
         'purchase' => 'authorise',
         'refund' => 'refund',
         'submit_recurring' => 'authorise',
@@ -32,16 +33,18 @@ module ActiveMerchant #:nodoc:
 
       RECURRING_VALUES = %w(ONECLICK RECURRING ONECLICK,RECURRING RECURRING,ONECLICK)
 
-      self.test_url = 'https://pal-test.adyen.com/pal/servlet/Payment/v12'
+      RECURRING_ACTIONS = %w(list_recurring_details token_lookup disable)
+
+      self.test_url = 'https://pal-test.adyen.com/pal/servlet/%{Service}/v12'
       # This is generic endpoint. Merchant-Specific endpoints are recommended  https://docs.adyen.com/manuals/api-manual#apiendpoints
-      self.live_url = 'https://pal-live.adyen.com/pal/servlet/Payment/v12'
+      self.live_url = 'https://pal-live.adyen.com/pal/servlet/%{Service}/v12'
 
       self.supported_countries = ['AR', 'AT', 'BE', 'BR', 'CA', 'CH', 'CL', 'CN', 'CO', 'DE', 'DK', 'EE', 'ES', 'FI', 'FR', 'GB', 'HK', 'ID', 'IE', 'IL', 'IN', 'IT', 'JP', 'KR', 'LU', 'MX', 'MY', 'NL', 'NO', 'PA', 'PE', 'PH', 'PL', 'PT', 'RU', 'SE', 'SG', 'TH', 'TR', 'TW', 'US', 'VN', 'ZA']
       self.default_currency = 'USD'
       self.money_format = :cents
       self.supported_cardtypes = [:visa, :master, :american_express, :discover, :diners_club, :jcb, :dankort, :maestro]
 
-      self.homepage_url = 'http://www.example.net/'
+      self.homepage_url = 'https://www.adyen.com/'
       self.display_name = 'Adyen v12'
 
       def initialize(options={})
@@ -114,6 +117,16 @@ module ActiveMerchant #:nodoc:
           r.process { authorize(100, credit_card, options) }
           r.process(:ignore_result) { void(r.authorization, options) }
         end
+      end
+
+      def list_recurring_details(shopper_reference, options)
+        requires!(options, :recurring)
+        post = initalize_post(options)
+        post[:shopperReference] = shopper_reference
+        post[:recurring] = {
+         contract: options[:recurring]
+        }
+        commit('list_recurring_details', post)
       end
 
       private
@@ -230,6 +243,8 @@ module ActiveMerchant #:nodoc:
           response['response'] == "[#{action}-received]"
         when 'void'
           response['response'] == "[cancel-received]"
+        when 'list_recurring_details'
+          response['details'].present?
         else
           false
         end
@@ -239,7 +254,7 @@ module ActiveMerchant #:nodoc:
         case action.to_s
         when 'authorize', 'purchase', 'authorize_recurring', 'submit_recurring'
           response['refusalReason'] || response['resultCode'] || response['message']
-        when 'capture', 'refund', 'void'
+        when 'capture', 'refund', 'void', 'list_recurring_details'
           response['response'] || response['message']
         end
       end
@@ -250,6 +265,8 @@ module ActiveMerchant #:nodoc:
           response['pspReference']
         when 'capture', 'refund', 'void'
           response['pspReference']
+        when 'list_recurring_details'
+          response['details']['firstPspReference']
         else
           false
         end
@@ -275,7 +292,12 @@ module ActiveMerchant #:nodoc:
       end
 
       def url_for_action(action)
-        url = (test? ? test_url : live_url)
+        url = (test? ? test_url : live_url).dup
+        if RECURRING_ACTIONS.include?(action.to_s)
+          url.gsub!('%{Service}', 'Recurring')
+        else
+          url.gsub!('%{Service}', 'Payment')
+        end
         "#{url}/#{ENDPOINTS[action.to_s]}"
       end
     end
