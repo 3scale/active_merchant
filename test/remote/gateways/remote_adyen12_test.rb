@@ -16,10 +16,6 @@ class RemoteAdyen12Test < Test::Unit::TestCase
     :brand => 'visa'
     )
 
-    # This crypted card needs to be generated every 24 hours for the tests to run
-    adyenjs = %Q(adyenjs_0_1_16$ub3bdU8BS+Us0HHO/mTQox/3cG8qlQ7C+NgRY0SC32PDPdqqOQ84Nk8BHgw+8TnBbAYDH++RnnU0gfiEEKi2TH7fZ/ayJqR6iyZeblOgjC8MYTx2Xnbhzj5LbkGsSTu0tbY2H8PMH0cpEBIX/jMsaLSZqPFH72Apj/RxaVBBTLe7cHYZav+Z2pDzfRAruBXDvMNp47BDK/o9h9Q5lmeN8uudJSiHHqTzdX8HfmfamUrftsPiXi8uxmsdAO0iDahQk8Q/G6Rbxdmf2MOl8fzTeyQ1rpDbSQegYuihi4y50EvRw4EmrEmTHyB9EsyWSYCdreO+PfRNgpJPijV3e7PXXQ==$nLUy0SGhf0V/o5hSmy8OrZgYdivEj08MZk2EYNkz1IwAyupQLH1b1XYBlZQp4NnljgayHsWFWPE1yT2FZlKa+P9g8eztHbd4H1TUtKu3WyfncQe9sr1Ax2JLC9Ju5mnT7xAxNh3suqXhbuLVFRcXWoujhkYtwxZo63EBCDW2Fyue2fHI1PFqHa5vKC9HKKhziTX3EXjsw29oTZOIREXogHoCuEXHQ025K7QOs3tXKoDbDzUyDhAnFKZX+/9PSFuKKDkt22kXSIvWlE8M2XrQOUcihT3xz9eOae4PMGNSNedoJhNuUyiOtadvlvG6tURJOk1Ny4EGrdkUh5sr0zkHByozrQCvrWlL3zD8gHRDhLt7QhRNCBrJ6NDBX3n9pBOStbh3vpD7We0Gp8dV2Lv7t5r24iB191H1N0sXvV5dJO6gMmHpatCVKGQ58EIHH1YXXmXRD5KDUec3vKc8Gwc3T+WCp/asuEfkqMH3ouqKA4c80m5ENK84mKb2fnONNVtazQt77/NM6h2NGDbNIZHKOV7P2LvsmR5ccEIn+8U5SGyoxN3PKG174Dl1NwKWdrgfjpC7DkOstpwRCVwycF+byBuyTCT7VBRJBvFzUKaOWdreCiVKGBT64op0r91KI2h/vpZzahvvxlnMyBYIVETrSkIfww1D7f8vfHop5SYQpiSlz9Z7xYRGqJAbLV6sYnIub0mYSvmFH4O5)
-    @credit_card = adyenjs
-
     @declined_card = credit_card('4000300011112220')
 
     @options = {
@@ -73,7 +69,14 @@ class RemoteAdyen12Test < Test::Unit::TestCase
     response = @gateway.authorize_recurring(0, @credit_card, @options.merge(@recurring))
     recurring = @gateway.submit_recurring(1500, response.authorization, @options.merge(@recurring.merge(@recurring_submission)))
     details = @gateway.list_recurring_details(@options[:shopperReference], recurring: 'RECURRING')
+
     assert_success details
+
+    details_hash = details.params['details'][0]['RecurringDetail']
+    assert_equal '1111', details_hash['card']['number']
+    assert_equal '8', details_hash['card']['expiryMonth']
+    assert_equal '2018', details_hash['card']['expiryYear']
+    assert_equal 'John Doe', details_hash['card']['holderName']
   end
 
   def test_successful_authorize_and_capture
