@@ -36,6 +36,44 @@ class Adyen12Test < Test::Unit::TestCase
     end
   end
 
+  def test_test_mode
+    gateway = Adyen12Gateway.new(
+      login: 'ws@example.com',
+      password: 'password',
+      merchantAccount: 'Mercantor'
+    )
+    assert_nil gateway.test
+    assert gateway.test?
+
+    gateway.test = false
+    refute gateway.test?
+
+    gateway.test = true
+    assert gateway.test?
+
+    assert gateway.test?
+
+    gateway = Adyen12Gateway.new(
+      login: 'ws@example.com',
+      password: 'password',
+      merchantAccount: 'Mercantor',
+      test: false
+    )
+    refute gateway.test
+    refute gateway.test?
+
+    gateway = Adyen12Gateway.new(
+      login: 'ws@example.com',
+      password: 'password',
+      merchantAccount: 'Mercantor',
+      test: true
+    )
+
+    assert gateway.test
+    assert gateway.test?
+
+  end
+
   def test_successful_authorize
     @gateway.expects(:ssl_post).returns(successful_authorize_response)
 
