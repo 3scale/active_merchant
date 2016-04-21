@@ -3,7 +3,6 @@ require 'test_helper'
 class Adyen12Test < Test::Unit::TestCase
   include CommStub
 
-  ### TESTS for EE only ###
   def setup
     @gateway = Adyen12Gateway.new(
       login: 'ws@example.com',
@@ -14,7 +13,14 @@ class Adyen12Test < Test::Unit::TestCase
     # @credit_card = credit_card
     # Credit card is represented by an encrypted string
     # It is provided by adyen JS library in EE for the initial payment
-    @credit_card = "adyenjs_0_1_10$aKV"
+    @credit_card = credit_card('4111111111111111',
+    :month => 8,
+    :year => 2018,
+    :first_name => 'Test',
+    :last_name => 'Card',
+    :verification_value => '737',
+    :brand => 'visa'
+    )
     @amount = 100
 
     @options = {
@@ -26,7 +32,7 @@ class Adyen12Test < Test::Unit::TestCase
 
   def test_authorize_requirements
     assert_raise ArgumentError, "Missing required parameter: reference" do
-      @gateway.authorize(@amount, @encrypted_credit_card_string, {})
+      @gateway.authorize(@amount, @credit_card, {})
     end
   end
 

@@ -266,7 +266,7 @@ module ActiveMerchant #:nodoc:
         when 'capture', 'refund', 'void'
           response['pspReference']
         when 'list_recurring_details'
-          response['details']['firstPspReference']
+          response['shopperReference']
         else
           false
         end
