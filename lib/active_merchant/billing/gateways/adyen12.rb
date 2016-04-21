@@ -28,7 +28,7 @@ module ActiveMerchant #:nodoc:
       ]
 
       RECURRING_SUBMISSION_FIELDS = %i[
-        shopperReference shopperEmail shopperInteraction selectedRecurringDetailReference
+        shopperReference shopperInteraction selectedRecurringDetailReference
       ]
 
       RECURRING_VALUES = %w(ONECLICK RECURRING ONECLICK,RECURRING RECURRING,ONECLICK)
@@ -82,7 +82,7 @@ module ActiveMerchant #:nodoc:
         commit('authorize_recurring', post)
       end
 
-      def submit_recurring(money, authorization, options = {})
+      def submit_recurring(money, options = {})
         requires!(options, :reference)
         post = initalize_post(options)
         add_invoice(post, money, options)
