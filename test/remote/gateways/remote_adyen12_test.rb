@@ -47,7 +47,7 @@ class RemoteAdyen12Test < Test::Unit::TestCase
 
   def test_successful_recurring_purchase
     response = @gateway.authorize_recurring(0, @credit_card, @options.merge(@recurring))
-    recurring = @gateway.submit_recurring(1500, response.authorization, @options.merge(@recurring.merge(@recurring_submission)))
+    recurring = @gateway.submit_recurring(1500, @options.merge(@recurring.merge(@recurring_submission)))
     assert_success response
     assert_success recurring
     assert_equal 'Authorised', response.message
@@ -56,7 +56,7 @@ class RemoteAdyen12Test < Test::Unit::TestCase
 
   def test_failed_recurring_purchase
     response = @gateway.authorize_recurring(0, @credit_card, @options.merge(@recurring))
-    recurring = @gateway.submit_recurring(1500, response.authorization, @options.merge({
+    recurring = @gateway.submit_recurring(1500, @options.merge({
       shopperInteraction: 'ContAuth',
       selectedRecurringDetailReference: 'NonExistent'
     }))
@@ -67,7 +67,7 @@ class RemoteAdyen12Test < Test::Unit::TestCase
 
   def test_list_recurring_details
     response = @gateway.authorize_recurring(0, @credit_card, @options.merge(@recurring))
-    recurring = @gateway.submit_recurring(1500, response.authorization, @options.merge(@recurring.merge(@recurring_submission)))
+    recurring = @gateway.submit_recurring(1500, @options.merge(@recurring.merge(@recurring_submission)))
     details = @gateway.list_recurring_details(@options[:shopperReference], recurring: 'RECURRING')
 
     assert_success details
