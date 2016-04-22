@@ -168,6 +168,20 @@ class Adyen12Test < Test::Unit::TestCase
     assert response.test?
   end
 
+  def test_successful_submit_recurring
+    @gateway.expects(:ssl_post).returns(successful_recurring_response)
+    options = {
+      shopperReference: 'John Doe',
+      reference: 'payment-1',
+      recurring: 'RECURRING',
+      shopperInteraction: 'ContAuth',
+      selectedRecurringDetailReference: 'LATEST'
+    }
+    assert_nothing_raised do
+      @gateway.submit_recurring(@amount, options)
+    end
+  end
+
   def test_successful_verify_with_failed_void
   end
 
@@ -279,6 +293,16 @@ class Adyen12Test < Test::Unit::TestCase
   end
 
   def successful_verify_response
+    %(
+    {
+        "pspReference" : "1234567890123456",
+        "resultCode" : "Authorised",
+        "authCode": "64158"
+    }
+    )
+  end
+
+  def successful_recurring_response
     %(
     {
         "pspReference" : "1234567890123456",
