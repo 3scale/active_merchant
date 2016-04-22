@@ -200,7 +200,8 @@ module ActiveMerchant #:nodoc:
       def add_recurring_information_for_submission(post, options)
         if options[:recurring]
           requires!(options, *RECURRING_SUBMISSION_FIELDS)
-          add_recurring_information(post, options)
+          post[:recurring] ||= {}
+          post[:recurring][:contract] = options[:recurring]
           post[:selectedRecurringDetailReference] = options[:selectedRecurringDetailReference] || 'LATEST'
         end
       end
