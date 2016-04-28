@@ -47,22 +47,10 @@ module ActiveMerchant #:nodoc:
       self.homepage_url = 'https://www.adyen.com/'
       self.display_name = 'Adyen v12'
 
-      attr_accessor :test
-
       def initialize(options={})
         requires!(options, :merchantAccount, :login, :password)
         @login, @password, @merchantAccount = options.values_at(:login, :password, :merchantAccount)
-        @test = options[:test]
         super
-      end
-
-      # Returns test mode
-      # If options[:test] is
-      # * <tt>nil</tt>: returns ActiveMerchant::Billing::Base.test?
-      # * <tt>true</tt>: returns true
-      # * <tt>false</tt>: returns false
-      def test?
-        @test.nil? ? super : @test
       end
 
       def purchase(money, payment, options={})
